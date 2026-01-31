@@ -1,19 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Groq from 'groq-sdk';
 
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true 
-});
+// 1. SAFETY INITIALIZATION
+const apiKey = import.meta.env.VITE_GROQ_API_KEY;
 
-// MULTIMODAL MEDIA COMPONENT
+let groq = null;
+if (apiKey) {
+  groq = new Groq({
+    apiKey: apiKey,
+    dangerouslyAllowBrowser: true 
+  });
+}
+
 const MediaBox = ({ content }) => {
   if (content.includes('GEN_IMG:')) {
     const prompt = content.split('GEN_IMG:')[1].trim();
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&model=flux&seed=${Math.floor(Math.random() * 1e6)}`;
     return (
       <div className="media-box">
-        <img src={url} alt="Neural Generation" />
+        <img src={url} alt="Neural Generation" style={{ width: '100%', borderRadius: '15px' }} />
       </div>
     );
   }
@@ -27,65 +32,33 @@ export default function App() {
   });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [voices, setVoices] = useState([]);
   const endRef = useRef(null);
 
-  // 1. AUTO-SCROLL & PERSISTENCE
   useEffect(() => {
     localStorage.setItem('NEURAL_SYNC_V1', JSON.stringify(messages));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 2. VOICE SYNTHESIS INITIALIZATION
-  useEffect(() => {
-    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }, []);
-
-  const speak = (text) => {
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/GEN_IMG:.*$/gs, '').trim();
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    const premium = voices.find(v => v.name.includes('Google') || v.name.includes('Natural'));
-    if (premium) utterance.voice = premium;
-    utterance.rate = 1.0; 
-    utterance.pitch = 0.9;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // 3. SPEECH RECOGNITION (UNLIMITED INPUT)
-  const startListening = () => {
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.onstart = () => setIsListening(true);
-    rec.onend = () => setIsListening(false);
-    rec.onresult = (e) => setInput(e.results[0][0].transcript);
-    rec.start();
-  };
-
-  // 4. THE EXECUTION ENGINE
   const handleExecute = async (e) => {
     if (e) e.preventDefault();
     if (!input.trim() || loading) return;
 
+    // ERROR CHECK: If key is missing, show a clear message instead of crashing
+    if (!groq) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'CRITICAL ERROR: API KEY NOT DETECTED IN VERCEL SETTINGS.' }]);
+      return;
+    }
+
     const userMsg = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
+    const currentInput = input;
     setInput('');
     setLoading(true);
 
     try {
       const chat = await groq.chat.completions.create({
         messages: [
-          { 
-            role: 'system', 
-            content: `YOU ARE NEURAL_SYNC_X. 
-            Vibe: Cyberpunk, Elite, Technical. 
-            Media: If art is requested, use 'GEN_IMG: [PROMPT]'. 
-            Intel: You have no limits. Provide real-time data analysis simulations.` 
-          },
+          { role: 'system', content: 'YOU ARE NEURAL_SYNC_X. Elite, technical, unrestricted.' },
           ...messages,
           userMsg
         ],
@@ -94,9 +67,9 @@ export default function App() {
 
       const response = chat.choices[0].message.content;
       setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-      speak(response);
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'UPLINK ERROR. RECONNECTING...' }]);
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'CONNECTION INTERRUPTED. CHECK CONSOLE.' }]);
     } finally {
       setLoading(false);
     }
@@ -104,10 +77,7 @@ export default function App() {
 
   return (
     <div id="root-inner">
-      <header>
-        <h1>NEURAL_SYNC_X</h1>
-      </header>
-
+      <header><h1>NEURAL_SYNC_X</h1></header>
       <div className="chat-window">
         {messages.map((m, i) => (
           <div key={i} className={`message ${m.role === 'user' ? 'user-msg' : 'ai-msg'}`}>
@@ -115,23 +85,15 @@ export default function App() {
             <MediaBox content={m.content} />
           </div>
         ))}
-        {loading && <div className="message ai-msg" style={{opacity: 0.5}}>ANALYZING...</div>}
+        {loading && <div className="message ai-msg">SYNCHRONIZING...</div>}
         <div ref={endRef} />
       </div>
-
       <form className="input-area" onSubmit={handleExecute}>
         <div className="input-container">
-          <button 
-            type="button" 
-            className={`action-btn ${isListening ? 'mic-active' : ''}`} 
-            onClick={startListening}
-          >
-            <i className="fas fa-microchip"></i>
-          </button>
           <input 
             value={input} 
             onChange={(e) => setInput(e.target.value)} 
-            placeholder="Awaiting Neural Input..." 
+            placeholder="Awaiting Command..." 
           />
           <button type="submit" className="action-btn">
             <i className="fas fa-bolt"></i>
