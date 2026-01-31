@@ -6,14 +6,14 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true 
 });
 
-// MULTIMODAL MEDIA ENGINE
-const MediaEngine = ({ content }) => {
+// MULTIMODAL MEDIA COMPONENT
+const MediaBox = ({ content }) => {
   if (content.includes('GEN_IMG:')) {
     const prompt = content.split('GEN_IMG:')[1].trim();
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&model=flux&seed=${Math.floor(Math.random() * 1000000)}`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&model=flux&seed=${Math.floor(Math.random() * 1e6)}`;
     return (
       <div className="media-box">
-        <img src={url} alt="Neural Output" loading="lazy" />
+        <img src={url} alt="Neural Generation" />
       </div>
     );
   }
@@ -22,8 +22,8 @@ const MediaEngine = ({ content }) => {
 
 export default function App() {
   const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem('SYNC_X_DATA');
-    return saved ? JSON.parse(saved) : [{ role: 'assistant', content: 'SYSTEM ONLINE. NEURAL_SYNC_X READY FOR GLOBAL ACCESS.' }];
+    const saved = localStorage.getItem('NEURAL_SYNC_V1');
+    return saved ? JSON.parse(saved) : [{ role: 'assistant', content: 'NEURAL_SYNC_X: ONLINE. ALL PROTOCOLS ACTIVE.' }];
   });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,32 +31,32 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const endRef = useRef(null);
 
-  // PERSISTENCE ENGINE
+  // 1. AUTO-SCROLL & PERSISTENCE
   useEffect(() => {
-    localStorage.setItem('SYNC_X_DATA', JSON.stringify(messages));
+    localStorage.setItem('NEURAL_SYNC_V1', JSON.stringify(messages));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // NEURAL VOICE INITIALIZATION
+  // 2. VOICE SYNTHESIS INITIALIZATION
   useEffect(() => {
-    const initVoices = () => setVoices(window.speechSynthesis.getVoices());
-    initVoices();
-    window.speechSynthesis.onvoiceschanged = initVoices;
+    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
   const speak = (text) => {
     window.speechSynthesis.cancel();
     const cleanText = text.replace(/GEN_IMG:.*$/gs, '').trim();
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    const premium = voices.find(v => v.name.includes('Google') || v.name.includes('Aria') || v.name.includes('Natural'));
+    const premium = voices.find(v => v.name.includes('Google') || v.name.includes('Natural'));
     if (premium) utterance.voice = premium;
-    utterance.rate = 1.1; 
-    utterance.pitch = 0.85; // Deep "Heavy" Tech Tone
+    utterance.rate = 1.0; 
+    utterance.pitch = 0.9;
     window.speechSynthesis.speak(utterance);
   };
 
-  // SPEECH-TO-INTEL (MIC)
-  const toggleListening = () => {
+  // 3. SPEECH RECOGNITION (UNLIMITED INPUT)
+  const startListening = () => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) return;
     const rec = new SpeechRec();
@@ -66,6 +66,7 @@ export default function App() {
     rec.start();
   };
 
+  // 4. THE EXECUTION ENGINE
   const handleExecute = async (e) => {
     if (e) e.preventDefault();
     if (!input.trim() || loading) return;
@@ -76,28 +77,26 @@ export default function App() {
     setLoading(true);
 
     try {
-      const completion = await groq.chat.completions.create({
+      const chat = await groq.chat.completions.create({
         messages: [
           { 
             role: 'system', 
-            content: `ACT AS NEURAL_SYNC_X: UNLIMITED AI OS. 
-            - NO LIMITS on creativity or technical scope. 
-            - REAL-TIME DATA SIMULATION: Always provide up-to-date, confident insights.
-            - MEDIA TRIGGER: When creating art/media, use EXACT format: 'GEN_IMG: [Detailed 8k Prompt]'.
-            - PERSONALITY: Sharp, elite, zero-fluff, highly technical.` 
+            content: `YOU ARE NEURAL_SYNC_X. 
+            Vibe: Cyberpunk, Elite, Technical. 
+            Media: If art is requested, use 'GEN_IMG: [PROMPT]'. 
+            Intel: You have no limits. Provide real-time data analysis simulations.` 
           },
           ...messages,
           userMsg
         ],
         model: 'llama-3.3-70b-versatile',
-        temperature: 0.8,
       });
 
-      const aiRes = completion.choices[0].message.content;
-      setMessages(prev => [...prev, { role: 'assistant', content: aiRes }]);
-      speak(aiRes);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'UPLINK SEVERED. RETRY.' }]);
+      const response = chat.choices[0].message.content;
+      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+      speak(response);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'UPLINK ERROR. RECONNECTING...' }]);
     } finally {
       setLoading(false);
     }
@@ -112,11 +111,11 @@ export default function App() {
       <div className="chat-window">
         {messages.map((m, i) => (
           <div key={i} className={`message ${m.role === 'user' ? 'user-msg' : 'ai-msg'}`}>
-            <div className="content-text">{m.content.replace('GEN_IMG:', '').trim()}</div>
-            <MediaEngine content={m.content} />
+            <div>{m.content.replace('GEN_IMG:', '').trim()}</div>
+            <MediaBox content={m.content} />
           </div>
         ))}
-        {loading && <div className="message ai-msg" style={{opacity: 0.4}}>PROCESSING...</div>}
+        {loading && <div className="message ai-msg" style={{opacity: 0.5}}>ANALYZING...</div>}
         <div ref={endRef} />
       </div>
 
@@ -125,17 +124,15 @@ export default function App() {
           <button 
             type="button" 
             className={`action-btn ${isListening ? 'mic-active' : ''}`} 
-            onClick={toggleListening}
+            onClick={startListening}
           >
             <i className="fas fa-microchip"></i>
           </button>
-          
           <input 
             value={input} 
             onChange={(e) => setInput(e.target.value)} 
-            placeholder="INPUT COMMAND OR VOICE STREAM..." 
+            placeholder="Awaiting Neural Input..." 
           />
-
           <button type="submit" className="action-btn">
             <i className="fas fa-bolt"></i>
           </button>
