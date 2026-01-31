@@ -3,7 +3,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  define: {
-    'process.env': {} // This prevents "process is not defined" errors in the browser
+  // Ensure the base path is absolute for Vercel routing
+  base: '/',
+  build: {
+    outDir: 'dist',
+  },
+  server: {
+    port: 3000
   }
 });
